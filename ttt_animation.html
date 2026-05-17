@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>TTT理論 - 0の均衡シミュレーター</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        #info {
+            position: absolute; top: 20px; width: 100%; text-align: center;
+            color: #00ffcc; font-size: 20px; font-weight: bold; pointer-events: none;
+            text-shadow: 0 0 10px rgba(0,255,204,0.8);
+        }
+    </style>
+</head>
+<body>
+    <div id="info">TTT理論: 1の対立から0の均衡へ<br><span style="font-size:14px; color:#fff;">ΣV = 0 (正四面体ラティス)</span></div>
+
+<script>
+    // インターネットがなくても動くように、ブラウザ内蔵の3D（WebGL）を直接制御する簡易記述に変更しました
+    const canvas = document.createElement('canvas');
+    document.body.appendChild(canvas);
+    const gl = canvas.getContext('webgl');
+
+    if (!gl) {
+        alert('お使いのブラウザは3D表示（WebGL）に対応していません。別のブラウザ（Chromeなど）でお試しください。');
+    }
+
+    // 画面サイズ調整
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // 背景を真っ黒に設定
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.enable(gl.DEPTH_TEST);
+
+    // シェーダー（描画プログラム）の作成
+    const vsSource = `
+        attribute vec3 position; attribute vec3 color;
+        varying vec3 vColor; uniform mat4 matrix;
+        void main() { vColor = color; gl_Position = matrix * vec4(position, 1.0); }
+    `;
+    const fsSource = `
+        precision mediump float; varying vec3 vColor;
+        void main() { gl_FragColor = vec4(vColor, 1.0); }
+    `;
+
+    function createShader(gl, type, source) {
+        const shader = gl.createShader(type); gl.shaderSource(shader, source); gl.compileShader(shader);
+        return shader;
+    }
+    const vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
+    const fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+    const program = gl.createProgram(); gl.attachShader(program, vs); gl.attachShader(program, fs); gl.linkProgram(program);
+    gl.useProgram(program);
+
+    // 正四面体の頂点（直交する2直線の端点から形成される4点）
+    // A(-1,1,-1), B(1,1,1) -> 男のベクトル
+    // C(1,-1,-1), D(-1,-1,1) -> 女のベクトル
+    const vertices = new Float32Array([
+        // 線の位置(X, Y, Z)     と     色(R, G, B)
+        // 男のベクトル（赤）
+        -1.5,  1.0,  0.0,    1.0, 0.2, 0.2,
+         1.5,  1.0,  0.0,    1.0, 0.2, 0.2,
+        // 女のベクトル（青、直交かつ距離を置く）
+         0.0, -1.0, -1.5,    0.2, 0.2, 1.0,
+         0.0, -1.0,  1.5,    0.2, 0.2, 1.0,
+        // 正四面体を形成する結びつきの線（緑・均衡の光）
+        -1.5,  1.0,  0.0,    0.0, 1.0, 0.8,
+         0.0, -1.0, -1.5,    0.0, 1.0, 0.8,
+        -1.5,  1.0,  0.0,    0.0, 1.0, 0.8,
+         0.0, -1.0,  1.5,    0.0, 1.0, 0.8,
+         1.5,  1.0,  0.0,    0.0, 1.0, 0.8,
+         0.0, -1.0, -1.5,    0.0, 1.0, 0.8,
+         1.5,  1.0,  0.0,    0.0, 1.0, 0.8,
+         0.0, -1.0,  1.5,    0.0, 1.0, 0.8
+    ]);
+
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+    const posAttr = gl.getAttribLocation(program, 'position');
+    gl.enableVertexAttribArray(posAttr);
+    gl.vertexAttribPointer(posAttr, 3, gl.FLOAT, false, 24, 0);
+
+    const colAttr = gl.getAttribLocation(program, 'color');
+    gl.enableVertexAttribArray(colAttr);
+    gl.vertexAttribPointer(colAttr, 3, gl.FLOAT, false, 24, 12);
+
+    const matUniform = gl.getUniformLocation(program, 'matrix');
+
+    // 回転のための数理計算（行列）
+    let angle = 0;
+    function render() {
+        angle += 0.01;
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        // 簡単な回転行列の作成
+        const c = Math.cos(angle); const s = Math.sin(angle);
+        const aspect = canvas.height / canvas.width;
+        const matrix = new Float32Array([
+            c*aspect,  0,   s, 0,
+            0,         1,   0, 0,
+           -s*aspect,  0,   c, 0,
+            0,         0, -0.3, 1  // 奥行きの調整
+        ]);
+        gl.uniformMatrix4fv(matUniform, false, matrix);
+
+        // 線の描画（太さを設定して描画）
+        gl.drawArrays(gl.LINES, 0, 12);
+
+        requestAnimationFrame(render);
+    }
+    render();
+</script>
+</body>
+</html>
+
